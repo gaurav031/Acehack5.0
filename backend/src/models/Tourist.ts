@@ -20,6 +20,7 @@ const touristSchema = new mongoose.Schema({
     profileImage: { type: String, default: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&w=200&q=80' },
     phone: { type: String },
     nationality: { type: String },
+    visaNumber: { type: String },
     lastUpdated: { type: Date, default: Date.now },
     status: { type: String, enum: ['active', 'inactive', 'emergency'], default: 'active' }
 }, { timestamps: true });

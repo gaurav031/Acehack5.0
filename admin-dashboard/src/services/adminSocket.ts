@@ -1,6 +1,6 @@
 import { io, Socket } from 'socket.io-client';
 
-const SOCKET_URL = 'http://localhost:5000';
+const SOCKET_URL = 'http://localhost:5001';
 
 class AdminSocketService {
     private socket: Socket | null = null;

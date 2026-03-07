@@ -11,7 +11,7 @@ const geoZoneSchema = new mongoose.Schema({
             required: true
         },
         coordinates: {
-            type: [[[Number]]], // Array of arrays of arrays of numbers
+            type: mongoose.Schema.Types.Mixed, // More flexible to avoid casting errors
             required: true
         }
     },

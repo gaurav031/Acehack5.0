@@ -5,6 +5,9 @@ import mongoose from 'mongoose';
 
 import { handleSocketEvents } from './sockets/safetySocket.js';
 
+import dotenv from 'dotenv';
+dotenv.config({ override: true });
+
 const PORT = process.env.PORT || 5001;
 const server = http.createServer(app);
 
