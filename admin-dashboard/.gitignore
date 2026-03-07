@@ -1,0 +1,68 @@
+# dependencies
+/node_modules
+/.pnp
+.pnp.js
+
+# production
+/build
+/dist
+
+# misc
+.DS_Store
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# coverage
+/coverage
+
+# testing
+/jest-cache
+
+# eslint cache
+.eslintcache
+
+# editor directories and files
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# OS files
+Thumbs.db
+
+# environment variables
+.env
+.env.*
+
+# temporary files
+*.tmp
+*.temp
+
+# build output
+/out
+
+# local netlify folder
+.netlify
+
+# vercel
+.vercel
+
+# typescript
+*.tsbuildinfo
