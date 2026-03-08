@@ -1,0 +1,1 @@
+﻿                                        If the merchant asks for more than â‚¹{scanResult.max_price}, show them this verified price or look for a nearby Govt-Retailer.

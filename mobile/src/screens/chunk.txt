@@ -1,0 +1,56 @@
+﻿
+                                <TouchableOpacity style={styles.rescanBtn} onPress={handleScanPress}>
+                                    <Camera size={20} color="#FFF" />
+                                    <Text style={styles.rescanText}>SCAN ANOTHER ITEM</Text>
+                                </TouchableOpacity>
+                            </View>
+                        ) : (
+                            <View style={styles.emptyScanContainer}>
+                                <Text style={styles.emptyScanText}>Press the button below to start scanning</Text>
+                            </View>
+                        )}
+                    </View>
+                </View>
+            )}
+        </View>
+    );
+};
+
+const styles = StyleSheet.create({
+    container: { flex: 1, backgroundColor: '#0F172A' },
+    govBanner: {
+        backgroundColor: 'rgba(239, 68, 68, 0.15)',
+        paddingVertical: 20,
+        paddingHorizontal: 20,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        borderBottomWidth: 2,
+        borderColor: 'rgba(239, 68, 68, 0.4)',
+        paddingTop: 60,
+    },
+    govBannerLeft: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        flex: 1,
+        gap: 15,
+    },
+    govBannerTextContainer: {
+        flex: 1,
+        borderLeftWidth: 3,
+        borderColor: '#EF4444',
+        paddingLeft: 12,
+    },
+    profileBtn: {
+        backgroundColor: 'rgba(248, 250, 252, 0.15)',
+        padding: 10,
+        borderRadius: 15,
+        borderWidth: 1,
+        borderColor: 'rgba(248, 250, 252, 0.2)',
+    },
+    govBannerText: {
+        color: '#F8FAFC',
+        fontSize: 14,
+        fontWeight: '900',
+        lineHeight: 18,
+        letterSpacing: 0.5,

@@ -1,0 +1,4 @@
+﻿                                </View>
+
+                                <TouchableOpacity style={styles.rescanBtn} onPress={handleScanPress}>
+                                    <Camera size={20} color="#FFF" />

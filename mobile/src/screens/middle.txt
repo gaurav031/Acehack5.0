@@ -1,0 +1,83 @@
+﻿                <View style={styles.footerBackground} />
+                <TouchableOpacity
+                    style={styles.footerTab}
+                    onPress={() => Alert.alert('Emergency SOS', 'Calling 112...')}
+                >
+                    <View style={[styles.footerIconBox, { backgroundColor: 'rgba(239, 68, 68, 0.1)' }]}>
+                        <Shield size={22} color="#EF4444" />
+                    </View>
+                    <Text style={[styles.footerTabText, { color: '#EF4444' }]}>{t('sos') || 'SOS'}</Text>
+                </TouchableOpacity>
+
+                <View style={styles.scannerBtnWrapper}>
+                    <TouchableOpacity
+                        style={styles.scannerBtnMain}
+                        onPress={handleScanPress}
+                        activeOpacity={0.7}
+                    >
+                        <View style={styles.scannerGlow} />
+                        <View style={styles.scannerInner}>
+                            <Camera size={32} color="#FFF" />
+                        </View>
+                        <View style={styles.scanBadge}>
+                            <Text style={styles.scanBadgeText}>AI</Text>
+                        </View>
+                    </TouchableOpacity>
+                    <Text style={styles.scannerLabel}>{t('verify_price') || 'Verify Price'}</Text>
+                </View>
+
+                <TouchableOpacity
+                    style={styles.footerTab}
+                    onPress={() => navigation.navigate('Chat')}
+                >
+                    <View style={[styles.footerIconBox, { backgroundColor: 'rgba(59, 130, 246, 0.1)' }]}>
+                        <MessageSquare size={22} color="#3B82F6" />
+                    </View>
+                    <Text style={[styles.footerTabText, { color: '#3B82F6' }]}>{t('ai_chat') || 'AI Chat'}</Text>
+                </TouchableOpacity>
+            </View>
+
+            {/* Premium Scanner / Price AI Native Result Overlay */}
+            {isScannerOpen && (
+                <View style={[StyleSheet.absoluteFill, { zIndex: 2000, backgroundColor: 'rgba(15, 23, 42, 0.98)' }]}>
+                    <TouchableOpacity
+                        style={styles.closeScannerBtn}
+                        onPress={closeScanner}
+                    >
+                        <Text style={styles.closeScannerText}>Close Dashboard</Text>
+                    </TouchableOpacity>
+
+                    <View style={styles.scannerHeader}>
+                        <ScanLine size={28} color="#EF4444" />
+                        <Text style={styles.scannerTitle}>AI PRICE ANALYZER</Text>
+                    </View>
+
+                    <View style={styles.nativeScanContent}>
+                        {isScanningImage ? (
+                            <View style={styles.scanLoadingContainer}>
+                                <ActivityIndicator size="large" color="#EF4444" />
+                                <Text style={styles.scanLoadingText}>AI is analyzing the product...</Text>
+                            </View>
+                        ) : scanResult ? (
+                            <View style={styles.resultContainer}>
+                                <View style={styles.itemBadge}>
+                                    <Text style={styles.itemFoundText}>TARGET RECOGNIZED</Text>
+                                </View>
+
+                                <Text style={styles.itemNameText}>{scanResult.item}</Text>
+
+                                <View style={styles.priceRangeCard}>
+                                    <Text style={styles.fairPriceLabel}>FAIR MARKET PRICE</Text>
+                                    <Text style={styles.priceValueText}>â‚¹{scanResult.min_price} - â‚¹{scanResult.max_price}</Text>
+                                    <View style={styles.trustBanner}>
+                                        <Shield size={14} color="#10B981" />
+                                        <Text style={styles.trustText}>GOVT VERIFIED RANGE</Text>
+                                    </View>
+                                </View>
+
+                                <View style={styles.scanAdviceBox}>
+                                    <Text style={styles.adviceTitle}>Guardian Tip:</Text>
+                                    <Text style={styles.adviceText}>
+                                        If the merchant asks for more than â‚¹{scanResult.max_price}, show them this verified price or look for a nearby Govt-Retailer.
+                                    </Text>
+                                </View>

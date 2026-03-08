@@ -1,0 +1,1 @@
+﻿                                <TouchableOpacity style={styles.rescanBtn} onPress={handleScanPress}>
