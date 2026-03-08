@@ -34,6 +34,7 @@ export const register = async (req: Request, res: Response) => {
 export const login = async (req: Request, res: Response) => {
     try {
         const { email, password } = req.body;
+        console.log(`[AUTH] Login attempt for: ${email}`);
 
         const tourist: any = await Tourist.findOne({ email });
         if (!tourist || !(await tourist.comparePassword(password))) {

@@ -40,8 +40,22 @@ export const createGeoZone = async (req: Request, res: Response) => {
 
         await zone.save();
         res.status(201).json({ success: true, data: zone });
-    } catch (error) {
+    } catch (error: any) {
         console.error('Error creating geo zone:', error);
+
+        // Handle Mongoose Validation Errors
+        if (error.name === 'ValidationError') {
+            return res.status(400).json({ success: false, message: error.message });
+        }
+
+        // Handle MongoDB GeoJSON Errors (e.g., self-intersecting polygons)
+        if (error.code === 16755 || error.message?.includes('Loop is not valid')) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid shape: The lines of your zone cross over each other. Please redraw without overlapping lines.'
+            });
+        }
+
         res.status(500).json({ success: false, message: 'Failed to create geo zone' });
     }
 };
@@ -76,10 +90,13 @@ export const updateGeoZone = async (req: Request, res: Response) => {
             };
         }
 
-        const zone = await GeoZone.findByIdAndUpdate(id, updateData, { new: true });
+        const zone = await GeoZone.findByIdAndUpdate(id, updateData, { new: true, runValidators: true });
         res.status(200).json({ success: true, data: zone });
-    } catch (error) {
+    } catch (error: any) {
         console.error('Error updating geo zone:', error);
+        if (error.name === 'ValidationError') {
+            return res.status(400).json({ success: false, message: error.message });
+        }
         res.status(500).json({ success: false, message: 'Failed to update geo zone' });
     }
 };

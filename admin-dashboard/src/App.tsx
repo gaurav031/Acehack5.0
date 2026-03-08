@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import { Shield, MapPin, AlertCircle, Users, Activity, Landmark, Building2, Plus, Trash2, Edit, X } from 'lucide-react';
+import { Shield, MapPin, AlertCircle, Users, Activity, Landmark, Building2, Plus, Trash2, Edit, X, Circle, Square, Layers, MousePointer2 } from 'lucide-react';
 import adminSocket from './services/adminSocket';
-import { MapContainer, TileLayer, Marker, Circle, useMapEvents, useMap, Polygon } from 'react-leaflet';
+import { MapContainer, TileLayer, CircleMarker, useMapEvents, useMap, Polygon } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 
@@ -376,11 +376,13 @@ const HotelsPanel = () => {
 // ---- GeoZones / Danger Zones Panel ----
 const GeoZonesPanel = () => {
     const [zones, setZones] = useState<any[]>([]);
-    const [loading, setLoading] = useState(true);
     const [showForm, setShowForm] = useState(false);
     const [editingZone, setEditingZone] = useState<any>(null);
+    const [points, setPoints] = useState<[number, number][]>([]);
+    const [mapType, setMapType] = useState<'streets' | 'satellite'>('streets');
+    const [drawMode, setDrawMode] = useState<'polygon' | 'circle' | 'square'>('polygon');
     const [form, setForm] = useState({
-        name: '', description: '', type: 'danger', lat: '', lng: '', radiusKm: '1'
+        name: '', description: '', type: 'danger'
     });
     const [searchQuery, setSearchQuery] = useState('');
     const [mapCenter, setMapCenter] = useState<[number, number]>([28.6139, 77.2090]);
@@ -388,88 +390,79 @@ const GeoZonesPanel = () => {
     useEffect(() => { fetchZones(); }, []);
 
     const fetchZones = async () => {
-        setLoading(true);
         try {
             const res = await fetch(`${API_BASE}/geo`);
             const data = await res.json();
             if (data.success) setZones(data.data);
-        } catch (e) { } finally { setLoading(false); }
+        } catch (e) { }
     };
 
     const handleSearch = async () => {
         if (!searchQuery) return;
         let q = searchQuery;
-        // If it looks like a pincode (6 digits), append India
+        // If it looks like a 6-digit Indian pincode, append India for better results
         if (/^\d{6}$/.test(searchQuery.trim())) {
             q = `${searchQuery.trim()}, India`;
         }
         try {
-            const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}`);
+            const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}`, {
+                headers: {
+                    'User-Agent': 'TouristSafety-Admin-Dashboard/1.0'
+                }
+            });
             const data = await res.json();
             if (data && data.length > 0) {
-                const newCenter: [number, number] = [parseFloat(data[0].lat), parseFloat(data[0].lon)];
-                setMapCenter(newCenter);
-                // Also update form lat/lng if adding new
-                if (!editingZone) {
-                    setForm(f => ({ ...f, lat: data[0].lat, lng: data[0].lon }));
-                }
+                setMapCenter([parseFloat(data[0].lat), parseFloat(data[0].lon)]);
             } else {
-                alert('Location not found. Try adding more details like city or state.');
+                alert('Location not found. Try adding more details like city or district.');
             }
         } catch (e) {
+            console.error('Search error:', e);
             alert('Search failed. Please try again.');
         }
     };
 
     const openAdd = () => {
         setEditingZone(null);
-        setForm({ name: '', description: '', type: 'danger', lat: '', lng: '', radiusKm: '1' });
+        setPoints([]);
+        setForm({ name: '', description: '', type: 'danger' });
         setShowForm(true);
     };
 
     const openEdit = (zone: any) => {
         setEditingZone(zone);
-        const centerLng = zone.geometry?.coordinates?.[0]?.[0]?.[0] || 0;
-        const centerLat = zone.geometry?.coordinates?.[0]?.[0]?.[1] || 0;
-
-        // Rough estimate of radius from coordinates if not stored
-        // In this app, we use a fixed square, so radius is approx difference
-        const lonDiff = Math.abs(zone.geometry?.coordinates?.[0]?.[1]?.[0] - centerLng) || 0;
-        const estRadiusKm = Math.round(lonDiff * 111 * 10) / 10 || 1;
-
+        const zPoints = zone.geometry?.coordinates?.[0]?.map((c: any) => [c[1], c[0]]) || [];
+        setPoints(zPoints);
         setForm({
             name: zone.name || '',
             description: zone.description || '',
-            type: zone.type || 'danger',
-            lat: String(centerLat),
-            lng: String(centerLng),
-            radiusKm: String(estRadiusKm)
+            type: zone.type || 'danger'
         });
-        setMapCenter([centerLat, centerLng]);
+        if (zPoints.length > 0) setMapCenter(zPoints[0]);
         setShowForm(true);
     };
 
     const handleSubmit = async () => {
-        // Convert radius km to approx degrees (1 degree = ~111km)
-        const radiusDeg = parseFloat(form.radiusKm) / 111;
-        const lat = parseFloat(form.lat) || 0;
-        const lng = parseFloat(form.lng) || 0;
+        if (!form.name.trim()) {
+            alert('Please provide a name for the zone.');
+            return;
+        }
+        if (points.length < 3) {
+            alert('Please mark at least 3 points on the map to define the area.');
+            return;
+        }
 
-        // Correct GeoJSON Polygon: [ [ [lng, lat], [lng, lat], ... ] ]
-        const coordinates = [[
-            [lng - radiusDeg, lat - radiusDeg],
-            [lng + radiusDeg, lat - radiusDeg],
-            [lng + radiusDeg, lat + radiusDeg],
-            [lng - radiusDeg, lat + radiusDeg],
-            [lng - radiusDeg, lat - radiusDeg]
-        ]];
+        // Ensure polygon is closed for GeoJSON
+        const closedPoints = [...points];
+        if (closedPoints[0][0] !== closedPoints[closedPoints.length - 1][0] ||
+            closedPoints[0][1] !== closedPoints[closedPoints.length - 1][1]) {
+            closedPoints.push(closedPoints[0]);
+        }
 
         const body = {
-            name: form.name,
-            description: form.description,
-            type: form.type,
-            coordinates: coordinates,
-            severity: 80
+            ...form,
+            coordinates: [closedPoints.map(p => [p[1], p[0]])], // GeoJSON is [lng, lat]
+            severity: form.type === 'danger' ? 90 : 50
         };
 
         try {
@@ -488,7 +481,7 @@ const GeoZonesPanel = () => {
                 alert(data.message || 'Failed to save zone');
             }
         } catch (e) {
-            alert('Failed to save zone');
+            alert('Failed to save zone. Please ensure the shape is valid and lines do not cross.');
         }
     };
 
@@ -500,11 +493,42 @@ const GeoZonesPanel = () => {
         } catch (e) { }
     };
 
+    const addPoint = (lat: number, lng: number) => {
+        if (drawMode === 'polygon') {
+            setPoints(prev => [...prev, [lat, lng]]);
+        } else if (drawMode === 'circle') {
+            // Generate 32 points for a 500m radius circle
+            const circlePoints: [number, number][] = [];
+            for (let i = 0; i < 32; i++) {
+                const angle = (i * 360) / 32;
+                const rad = (angle * Math.PI) / 180;
+                const pLat = lat + (0.5 / 111.32) * Math.cos(rad);
+                const pLng = lng + (0.5 / (111.32 * Math.cos(lat * Math.PI / 180))) * Math.sin(rad);
+                circlePoints.push([pLat, pLng]);
+            }
+            setPoints(circlePoints);
+        } else if (drawMode === 'square') {
+            // Generate 4 points for a 1km square
+            const d = 0.5; // half size
+            const latDiff = d / 111.32;
+            const lngDiff = d / (111.32 * Math.cos(lat * Math.PI / 180));
+            setPoints([
+                [lat - latDiff, lng - lngDiff],
+                [lat - latDiff, lng + lngDiff],
+                [lat + latDiff, lng + lngDiff],
+                [lat + latDiff, lng - lngDiff]
+            ]);
+        }
+    };
+
+    const clearPoints = () => setPoints([]);
+    const undoLastPoint = () => setPoints(prev => prev.slice(0, -1));
+
     const Field = ({ label, value, onChange, type = 'text', rows = 1 }: any) => (
         <div className="mb-4">
             <label className="block text-slate-400 text-xs font-bold uppercase mb-1">{label}</label>
             {rows > 1 ? (
-                <textarea className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm resize-none focus:outline-none focus:border-red-500" value={value} onChange={e => onChange(e.target.value)} rows={rows} />
+                <textarea className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-red-500" value={value} onChange={e => onChange(e.target.value)} rows={rows} />
             ) : (
                 <input type={type} className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-red-500" value={value} onChange={e => onChange(e.target.value)} />
             )}
@@ -515,123 +539,174 @@ const GeoZonesPanel = () => {
         <div className="flex flex-col h-full">
             <div className="flex justify-between items-center mb-6">
                 <div>
-                    <h3 className="text-2xl font-bold text-white">Danger Zones Management</h3>
-                    <p className="text-slate-400 text-sm mt-1">{zones.length} active geo-fences</p>
+                    <h3 className="text-2xl font-bold text-white">Geo-Fence Manager</h3>
+                    <p className="text-slate-400 text-sm mt-1">{zones.length} zones defined</p>
                 </div>
-                <button onClick={openAdd} className="flex items-center gap-2 bg-red-600 hover:bg-red-500 text-white px-5 py-3 rounded-xl font-bold transition-all shadow-lg shadow-red-900/30">
-                    <Plus className="w-5 h-5" /> Add Zone
-                </button>
+                {!showForm && (
+                    <button onClick={openAdd} className="bg-red-600 hover:bg-red-500 text-white px-5 py-3 rounded-xl font-bold transition-all shadow-lg flex items-center gap-2">
+                        <Plus className="w-5 h-5" /> Start Marking Zone
+                    </button>
+                )}
             </div>
 
-            <div className="flex-1 grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {/* Left side: Map View for existing zones */}
-                <div className="lg:col-span-2 bg-slate-800 rounded-2xl overflow-hidden border border-slate-700 min-h-[500px] z-0">
-                    <MapContainer center={[28.6139, 77.2090]} zoom={11} style={{ height: '100%', width: '100%' }}>
-                        <TileLayer
-                            url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-                            attribution='&copy; OpenStreetMap contributors &copy; CARTO'
-                        />
-                        {zones.map((zone) => {
-                            if (!zone.geometry?.coordinates || !zone.geometry.coordinates[0]) return null;
-                            const coords = zone.geometry.coordinates[0].map((c: number[]) => [c[1], c[0]]);
-                            const color = zone.type === 'danger' ? '#EF4444' : zone.type === 'restricted' ? '#F59E0B' : '#10B981';
-                            return (
-                                <Polygon key={zone._id} positions={coords as [number, number][]} pathOptions={{ color, fillColor: color, fillOpacity: 0.4 }} />
-                            );
-                        })}
-                    </MapContainer>
-                </div>
+            <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 flex-1">
+                {/* Information & List Panel */}
+                <div className="lg:col-span-1 space-y-4 max-h-[70vh] overflow-y-auto pr-2">
+                    {showForm ? (
+                        <div className="bg-slate-800 border border-slate-700 rounded-2xl p-6 border-t-4 border-t-red-500 shadow-xl">
+                            <h4 className="text-white font-bold mb-4">{editingZone ? 'Update Zone' : 'New Zone Details'}</h4>
+                            <Field label="Zone Name" value={form.name} onChange={(v: string) => setForm(f => ({ ...f, name: v }))} />
+                            <div className="mb-4">
+                                <label className="block text-slate-400 text-xs font-bold uppercase mb-1">Type</label>
+                                <select className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm" value={form.type} onChange={e => setForm(f => ({ ...f, type: e.target.value }))}>
+                                    <option value="danger">Danger (High Risk)</option>
+                                    <option value="restricted">Restricted (No Entry)</option>
+                                </select>
+                            </div>
+                            <Field label="Notes" value={form.description} onChange={(v: string) => setForm(f => ({ ...f, description: v }))} rows={3} />
 
-                {/* Right side: List of zones */}
-                <div className="flex flex-col gap-4 overflow-y-auto max-h-[500px] pr-2">
-                    {loading ? (
-                        <div className="text-center py-20 text-slate-500">Loading zones...</div>
+                            <div className="bg-slate-900 p-3 rounded-xl mb-4 border border-slate-700">
+                                <div className="flex justify-between items-center mb-2">
+                                    <span className="text-xs text-slate-500 font-bold uppercase">Marked Points</span>
+                                    <div className="flex gap-2">
+                                        <button onClick={undoLastPoint} title="Undo last point" className="text-[10px] bg-slate-700 hover:bg-slate-600 px-2 py-0.5 rounded text-white">Undo</button>
+                                        <span className="text-xs bg-red-500/20 text-red-400 px-2 py-0.5 rounded-full">{points.length}</span>
+                                    </div>
+                                </div>
+                                <p className="text-[10px] text-slate-400 italic">Click on the map to define vertices. Minimum 3 points required.</p>
+                            </div>
+
+                            <button onClick={handleSubmit} className="w-full bg-red-600 hover:bg-red-500 text-white py-3 rounded-xl font-bold transition-all mb-2">
+                                {editingZone ? 'Apply Updates' : 'Save Geo-Fence'}
+                            </button>
+                            <button onClick={() => setShowForm(false)} className="w-full bg-slate-700 hover:bg-slate-600 text-slate-300 py-3 rounded-xl font-bold transition-all">
+                                Cancel
+                            </button>
+                        </div>
                     ) : (
                         zones.map(zone => (
-                            <div key={zone._id} className="bg-slate-800 border fill-red-500 border-slate-700 rounded-2xl p-5 relative">
-                                <div className="absolute top-4 right-4 flex gap-2">
-                                    <button onClick={() => openEdit(zone)} className="bg-blue-600 hover:bg-blue-500 p-2 rounded-lg transition-colors"><Edit className="w-4 h-4 text-white" /></button>
-                                    <button onClick={() => handleDelete(zone._id)} className="bg-red-600 hover:bg-red-500 p-2 rounded-lg transition-colors"><Trash2 className="w-4 h-4 text-white" /></button>
-                                </div>
-                                <div className="flex items-center gap-3 mb-3">
-                                    <div className={`p-2 rounded-full ${zone.type === 'danger' ? 'bg-red-500/20 text-red-500' : 'bg-amber-500/20 text-amber-500'}`}>
-                                        <MapPin className="w-5 h-5" />
-                                    </div>
-                                    <h4 className="text-white font-bold text-lg">{zone.name}</h4>
-                                </div>
-                                <p className="text-slate-400 text-sm mb-4">{zone.description}</p>
-                                <div className="bg-slate-900 rounded-lg p-3">
-                                    <p className="text-xs text-slate-500 mb-1">Center Coordinates</p>
-                                    <p className="text-sm font-mono text-emerald-400">
-                                        {(zone.geometry?.coordinates?.[0]?.[0]?.[1] || 0).toFixed(4)}, {(zone.geometry?.coordinates?.[0]?.[0]?.[0] || 0).toFixed(4)}
-                                    </p>
+                            <div key={zone._id} className={`bg-slate-800 border-l-4 rounded-xl p-4 border border-slate-700 ${zone.type === 'danger' ? 'border-l-red-500' : 'border-l-amber-500'}`}>
+                                <h5 className="text-white font-bold">{zone.name}</h5>
+                                <p className="text-slate-400 text-xs mt-1">{zone.description}</p>
+                                <div className="flex gap-2 mt-4">
+                                    <button onClick={() => openEdit(zone)} className="bg-blue-600 hover:bg-blue-500 p-2 rounded-lg"><Edit className="w-4 h-4 text-white" /></button>
+                                    <button onClick={() => handleDelete(zone._id)} className="bg-red-600 hover:bg-red-500 p-2 rounded-lg"><Trash2 className="w-4 h-4 text-white" /></button>
+                                    <button onClick={() => setMapCenter(zone.geometry.coordinates[0][0].reverse())} className="text-xs text-slate-500 ml-auto hover:text-white underline">Find on Map</button>
                                 </div>
                             </div>
                         ))
                     )}
                 </div>
-            </div>
 
-            {showForm && (
-                <Modal title={editingZone ? 'Edit Danger Zone' : 'Add Danger Zone'} onClose={() => setShowForm(false)}>
-                    <Field label="Zone Name *" value={form.name} onChange={(v: string) => setForm(f => ({ ...f, name: v }))} />
-                    <Field label="Description *" value={form.description} onChange={(v: string) => setForm(f => ({ ...f, description: v }))} rows={2} />
+                {/* Interactive Map Panel */}
+                <div className="lg:col-span-3 bg-slate-800 rounded-3xl overflow-hidden border-2 border-slate-700 relative shadow-2xl z-0 group">
+                    {/* Floating Toolbar */}
+                    <div className="absolute top-4 left-4 z-[1000] right-4 flex gap-3 pointer-events-none">
+                        <div className="flex-1 flex gap-2 pointer-events-auto">
+                            <div className="relative flex-1">
+                                <input
+                                    type="text"
+                                    placeholder="Search location (Address, Pincode)..."
+                                    className="w-full bg-slate-900/80 border border-slate-700/50 rounded-2xl px-5 py-3 text-white text-sm backdrop-blur-xl shadow-2xl focus:outline-none focus:border-red-500/50"
+                                    value={searchQuery}
+                                    onChange={e => setSearchQuery(e.target.value)}
+                                    onKeyDown={e => e.key === 'Enter' && handleSearch()}
+                                />
+                                <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                                    <button onClick={handleSearch} className="bg-red-600 hover:bg-red-500 text-white px-4 py-1.5 rounded-xl font-bold text-xs transition-all">Go</button>
+                                </div>
+                            </div>
+                        </div>
 
-                    <div className="mb-4">
-                        <label className="block text-slate-400 text-xs font-bold uppercase mb-1">Zone Type</label>
-                        <select className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm" value={form.type} onChange={e => setForm(f => ({ ...f, type: e.target.value }))}>
-                            <option value="danger">Danger (Red Zone)</option>
-                            <option value="restricted">Restricted (No Entry)</option>
-                            <option value="safe">Safe Area</option>
-                        </select>
+                        {showForm && (
+                            <div className="bg-slate-900/80 backdrop-blur-xl border border-slate-700/50 rounded-2xl p-1.5 flex gap-1 pointer-events-auto shadow-2xl">
+                                {[
+                                    { id: 'polygon', icon: MousePointer2, label: 'Line' },
+                                    { id: 'circle', icon: Circle, label: 'Circle' },
+                                    { id: 'square', icon: Square, label: 'Square' }
+                                ].map(tool => (
+                                    <button
+                                        key={tool.id}
+                                        onClick={() => { setDrawMode(tool.id as any); setPoints([]); }}
+                                        className={`p-2.5 rounded-xl transition-all flex items-center gap-2 ${drawMode === tool.id ? 'bg-red-600 text-white' : 'text-slate-400 hover:bg-slate-800'}`}
+                                        title={tool.label}
+                                    >
+                                        <tool.icon className="w-4 h-4" />
+                                        <span className="text-[10px] font-black uppercase tracking-tighter">{tool.label}</span>
+                                    </button>
+                                ))}
+                                <div className="w-px bg-slate-700 mx-1 my-1" />
+                                <button onClick={clearPoints} className="px-3 text-[10px] font-black text-amber-500 hover:bg-slate-800 rounded-xl uppercase tracking-tighter">Reset</button>
+                            </div>
+                        )}
+
+                        <div className="bg-slate-900/80 backdrop-blur-xl border border-slate-700/50 rounded-2xl p-1.5 flex gap-1 pointer-events-auto shadow-2xl ml-auto">
+                            <button
+                                onClick={() => setMapType(mapType === 'streets' ? 'satellite' : 'streets')}
+                                className="p-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white flex items-center gap-2 border border-slate-700/50"
+                            >
+                                <Layers className="w-4 h-4" />
+                                <span className="text-[10px] font-black uppercase tracking-tighter">{mapType === 'streets' ? 'Satellite' : 'Street'}</span>
+                            </button>
+                        </div>
                     </div>
 
-                    <p className="block text-slate-400 text-xs font-bold uppercase mb-1 mt-4">Search Address to Center Map</p>
-                    <div className="flex gap-2 mb-3">
-                        <input
-                            type="text"
-                            className="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-red-500"
-                            placeholder="e.g. Red Fort, Delhi or 110001"
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleSearch(); } }}
-                        />
-                        <button
-                            onClick={handleSearch}
-                            className="bg-slate-700 hover:bg-slate-600 px-4 rounded-lg text-white font-bold text-sm transition-colors"
-                        >Search</button>
-                    </div>
+                    <MapContainer center={mapCenter} zoom={13} style={{ height: '100%', width: '100%' }}>
+                        <MapUpdater center={mapCenter} />
+                        {mapType === 'streets' ? (
+                            <TileLayer key="streets" url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" />
+                        ) : (
+                            <TileLayer key="satellite" url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" attribution="&copy; Esri" />
+                        )}
 
-                    <p className="block text-slate-400 text-xs font-bold uppercase mb-1">Drop a Pin for Center Location *</p>
-                    <div className="h-[200px] w-full rounded-lg overflow-hidden border border-slate-700 mb-4 z-0">
-                        <MapContainer center={mapCenter} zoom={11} style={{ height: '100%', width: '100%' }}>
-                            <MapUpdater center={mapCenter} />
-                            <TileLayer
-                                url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+                        {/* Render existing zones */}
+                        {zones.map(zone => {
+                            if (!zone.geometry?.coordinates?.[0]) return null;
+                            const coords = zone.geometry.coordinates[0].map((c: any) => [c[1], c[0]]);
+                            const color = zone.type === 'danger' ? '#EF4444' : '#F59E0B';
+                            return <Polygon key={zone._id} positions={coords} pathOptions={{ color, fillColor: color, fillOpacity: 0.4 }} />;
+                        })}
+
+                        {/* Render preview for current drawing */}
+                        {points.length > 1 && (
+                            <Polygon
+                                key={`drawing-${points.length}-${drawMode}`}
+                                positions={points}
+                                pathOptions={{
+                                    color: '#3B82F6',
+                                    dashArray: '5, 5',
+                                    fillColor: '#3B82F6',
+                                    fillOpacity: 0.3,
+                                    weight: 4
+                                }}
                             />
-                            {form.lat && form.lng && <Marker position={[parseFloat(form.lat), parseFloat(form.lng)]} />}
-                            <MapClickEvents setLat={(lat: string) => setForm(f => ({ ...f, lat }))} setLng={(lng: string) => setForm(f => ({ ...f, lng }))} />
-                        </MapContainer>
-                    </div>
+                        )}
 
-                    <Field label="Radius (in km) *" value={form.radiusKm} onChange={(v: string) => setForm(f => ({ ...f, radiusKm: v }))} type="number" />
+                        {/* Render points/markers for drawing */}
+                        {drawMode === 'polygon' ? (
+                            points.map((p, i) => (
+                                <CircleMarker key={i} center={p} radius={5} pathOptions={{ color: 'white', fillColor: '#3B82F6', fillOpacity: 1, weight: 2 }} />
+                            ))
+                        ) : (
+                            points.length > 0 && <CircleMarker center={[points[0][0], points[0][1]]} radius={6} pathOptions={{ color: 'white', fillColor: '#10B981', fillOpacity: 1 }} />
+                        )}
 
-                    <button disabled={!form.lat} onClick={handleSubmit} className="disabled:opacity-50 w-full bg-red-600 hover:bg-red-500 text-white py-3 rounded-xl font-bold transition-all mt-4">
-                        {editingZone ? 'Update Zone' : 'Create Zone'}
-                    </button>
-                </Modal>
-            )}
+                        {/* Capture clicks */}
+                        {showForm && (
+                            <CaptureMapClicks key={drawMode} onAddPoint={addPoint} />
+                        )}
+                    </MapContainer>
+                </div>
+            </div>
         </div>
     );
 };
 
-// Map Click component
-const MapClickEvents = ({ setLat, setLng }: { setLat: (lat: string) => void, setLng: (lng: string) => void }) => {
+const CaptureMapClicks = ({ onAddPoint }: { onAddPoint: (lat: number, lng: number) => void }) => {
     useMapEvents({
         click(e) {
-            setLat(e.latlng.lat.toString());
-            setLng(e.latlng.lng.toString());
-        },
+            onAddPoint(e.latlng.lat, e.latlng.lng);
+        }
     });
     return null;
 };
